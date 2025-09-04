@@ -1,0 +1,5 @@
+{
+  "name": "AI Interior Designer",
+  "description": "An interactive web application that allows users to upload a photo of their room, remove existing furniture with AI, and then add new virtual furniture and appliances to visualize a new design.",
+  "requestFramePermissions": []
+}

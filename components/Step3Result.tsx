@@ -31,21 +31,10 @@ const Step3Result: React.FC<Step3ResultProps> = ({ cleanedImage, selectedItems, 
       setFinalImage(result);
     } catch (err: any) {
         console.error(err);
-        let errorMessage = "AI 生成設計圖時發生錯誤，請返回並重試。";
-        if (err instanceof Error && err.message) {
-            try {
-                // Attempt to parse the Gemini API's JSON error response
-                const errorResponse = JSON.parse(err.message);
-                if (errorResponse.error && errorResponse.error.message) {
-                    errorMessage = `AI 服務錯誤： ${errorResponse.error.message}`;
-                } else {
-                    errorMessage = `AI 生成設計圖時發生錯誤： ${err.message}`;
-                }
-            } catch (parseError) {
-                // If it's not JSON, use the raw message
-                errorMessage = `AI 生成設計圖時發生錯誤： ${err.message}`;
-            }
-        }
+        // The service now throws user-friendly errors, so we can display the message directly.
+        const errorMessage = (err instanceof Error)
+            ? err.message
+            : "發生未知錯誤，請稍後再試。";
         setError(errorMessage);
     } finally {
       setIsLoading(false);

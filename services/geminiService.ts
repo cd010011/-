@@ -45,30 +45,44 @@ const generateContentWithRetry = async (
             if (err instanceof Error && err.message) {
                 try {
                     const errorResponse = JSON.parse(err.message);
-                    // Check for rate limit error (429) and if we haven't exhausted retries
-                    if (errorResponse.error?.code === 429 && i < maxRetries - 1) {
-                        const retryInfo = errorResponse.error.details?.find((d: any) => d['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
-                        let retryAfter = Math.pow(2, i) * 5; // Default exponential backoff (5s, 10s)
-                        
-                        if (retryInfo?.retryDelay) {
-                            retryAfter = parseInt(retryInfo.retryDelay.replace('s', ''));
+                    // Check for rate limit error (429)
+                    if (errorResponse.error?.code === 429) {
+                        // Specifically check if it's a daily quota limit, which is not retryable.
+                        const violations = errorResponse.error.details?.flatMap((d: any) => d.violations || []);
+                        const isDailyQuota = violations.some((v: any) => v.quotaId?.includes('PerDay'));
+
+                        if (isDailyQuota) {
+                            // Throw a specific, user-friendly error immediately.
+                            throw new Error("您已達到今日的免費使用上限。請明天再試，或為您的 Google Cloud 專案啟用計費以解除限制。");
                         }
                         
-                        onStatusUpdate?.(`已達請求上限。將在 ${retryAfter} 秒後重試 (${i + 1}/${maxRetries - 1})...`);
-                        await new Promise(res => setTimeout(res, retryAfter * 1000));
-                        onStatusUpdate?.('正在重試...');
-                        continue; // Continue to the next iteration of the loop to retry
+                        // If it's another type of rate limit and we haven't exhausted retries, proceed.
+                        if (i < maxRetries - 1) {
+                            const retryInfo = errorResponse.error.details?.find((d: any) => d['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
+                            let retryAfter = Math.pow(2, i) * 5; // Default exponential backoff (5s, 10s)
+                            
+                            if (retryInfo?.retryDelay) {
+                                retryAfter = parseInt(retryInfo.retryDelay.replace('s', ''));
+                            }
+                            
+                            onStatusUpdate?.(`已達請求上限。將在 ${retryAfter} 秒後重試 (${i + 1}/${maxRetries - 1})...`);
+                            await new Promise(res => setTimeout(res, retryAfter * 1000));
+                            onStatusUpdate?.('正在重試...');
+                            continue; // Continue to the next iteration of the loop to retry
+                        }
                     }
-                } catch (e) {
-                    // Not a parsable JSON error, fall through to throw the original error
+                } catch (e: any) {
+                    // This inner catch will grab our custom daily quota error and re-throw it.
+                    // It will also catch non-JSON parse errors. In either case, we stop.
+                    throw e;
                 }
             }
-            // Rethrow if it's not a rate-limit error or if retries are exhausted
+            // Rethrow if it's not a parsable rate-limit error or if retries are exhausted
             throw err;
         }
     }
     // This should not be reached if maxRetries > 0, but is a safeguard.
-    throw new Error('AI request failed after multiple retries.');
+    throw new Error('AI 請求在多次重試後失敗。');
 };
 
 export const cleanImage = async (base64Image: string, onStatusUpdate?: (status: string) => void): Promise<string> => {

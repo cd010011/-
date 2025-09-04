@@ -1,14 +1,17 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import type { GenerateContentResponse } from "@google/genai";
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-if (!API_KEY) {
-  // In a real app, you'd want to handle this more gracefully,
-  // but for this context, throwing an error is fine.
-  throw new Error("API_KEY environment variable is not set");
-}
+const API_KEY_STORAGE_KEY = 'gemini-api-key';
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// This function will be the single source for getting an initialized client.
+const getGeminiClient = () => {
+    const apiKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (!apiKey) {
+        throw new Error("API 金鑰未設定。請在第一步中輸入您的 API 金鑰。");
+    }
+    return new GoogleGenAI({ apiKey });
+};
+
 
 const getBase64Parts = (base64Data: string) => {
   const match = base64Data.match(/^data:(image\/\w+);base64,(.*)$/);
@@ -28,6 +31,7 @@ const extractImageFromResponse = (response: GenerateContentResponse): string => 
 }
 
 export const cleanImage = async (base64Image: string): Promise<string> => {
+  const ai = getGeminiClient();
   const { mimeType, data } = getBase64Parts(base64Image);
   const prompt = `Your task is to be a hyper-realistic digital staging expert. Your goal is to completely empty the room in this photo, leaving only its fundamental architectural structure. You must remove **everything** that is not part of the building itself. This includes:
 - All furniture (sofas, chairs, tables, beds, cabinets, etc.).
@@ -53,6 +57,7 @@ The final image must be a photorealistic depiction of a completely vacant room, 
 };
 
 export const furnishImage = async (base64Image: string, itemsPrompt: string): Promise<string> => {
+  const ai = getGeminiClient();
   const { mimeType, data } = getBase64Parts(base64Image);
   const fullPrompt = `Using this image of an empty room as a base, add the following items according to the descriptions:\n${itemsPrompt}\n\nDo not add any other items. Generate a photorealistic image of the furnished room. The lighting and shadows of the new items should match the room's existing lighting.`;
   

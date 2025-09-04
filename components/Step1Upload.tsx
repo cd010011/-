@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { fileToBase64, resizeImage, downloadImage } from '../utils/imageUtils';
 import { cleanImage } from '../services/geminiService';
 import Spinner from './common/Spinner';
 import SparklesIcon from './icons/SparklesIcon';
 import TrashIcon from './icons/TrashIcon';
 import ArrowDownTrayIcon from './icons/ArrowDownTrayIcon';
+import KeyIcon from './icons/KeyIcon';
+
 
 interface Step1UploadProps {
   onComplete: (originalImage: string, cleanedImage: string) => void;
@@ -26,6 +28,29 @@ const Step1Upload: React.FC<Step1UploadProps> = ({ onComplete, initialImage = nu
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isKeySaved, setIsKeySaved] = useState(false);
+  const [showKeySavedMessage, setShowKeySavedMessage] = useState(false);
+  
+  const API_KEY_STORAGE_KEY = 'gemini-api-key';
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (savedKey) {
+        setIsKeySaved(true);
+    }
+  }, []);
+
+  const handleSaveApiKey = () => {
+    if (apiKeyInput.trim()) {
+        localStorage.setItem(API_KEY_STORAGE_KEY, apiKeyInput.trim());
+        setIsKeySaved(true);
+        setApiKeyInput('');
+        setShowKeySavedMessage(true);
+        setTimeout(() => setShowKeySavedMessage(false), 2500);
+    }
+  };
+
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -46,40 +71,28 @@ const Step1Upload: React.FC<Step1UploadProps> = ({ onComplete, initialImage = nu
   }, []);
 
   const handleCleanImage = useCallback(async () => {
-    if (isLoading) return;
+    if (isLoading || !isKeySaved) return;
+
+    const imageToProcess = cleanedImage || originalImage;
+    if (!imageToProcess) return;
 
     if (cleanedImage) {
-        // Re-cleaning: Use the current cleaned image as the new source.
-        const imageToReClean = cleanedImage;
-        setOriginalImage(imageToReClean);
+        setOriginalImage(cleanedImage);
         setCleanedImage(null);
-        
-        setError(null);
-        setIsLoading(true);
-        try {
-            const result = await cleanImage(imageToReClean);
-            setCleanedImage(result);
-        } catch (err) {
-            setError('AI 重新清理時發生錯誤，請稍後再試。');
-            console.error(err);
-        } finally {
-            setIsLoading(false);
-        }
-    } else if (originalImage) {
-        // First clean: Use the uploaded original image.
-        setError(null);
-        setIsLoading(true);
-        try {
-            const result = await cleanImage(originalImage);
-            setCleanedImage(result);
-        } catch (err) {
-            setError('AI 清理時發生錯誤，請稍後再試。');
-            console.error(err);
-        } finally {
-            setIsLoading(false);
-        }
     }
-  }, [originalImage, cleanedImage, isLoading]);
+    
+    setError(null);
+    setIsLoading(true);
+    try {
+        const result = await cleanImage(imageToProcess);
+        setCleanedImage(result);
+    } catch (err: any) {
+        setError(`AI 清理時發生錯誤：${err.message}`);
+        console.error(err);
+    } finally {
+        setIsLoading(false);
+    }
+  }, [originalImage, cleanedImage, isLoading, isKeySaved]);
   
   const triggerFileSelect = () => fileInputRef.current?.click();
 
@@ -88,6 +101,35 @@ const Step1Upload: React.FC<Step1UploadProps> = ({ onComplete, initialImage = nu
       <h2 className="text-2xl font-bold text-center mb-2">第一步：上傳並清理您的空間</h2>
       <p className="text-center text-gray-400 mb-6">上傳一張室內照片，我們將用 AI 為您移除所有傢俱和雜物。</p>
       
+      <div className="max-w-xl mx-auto my-6 p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+        <label htmlFor="api-key-input" className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-2">
+            <KeyIcon className="h-4 w-4" />
+            Google AI Studio API 金鑰
+        </label>
+        <div className="flex items-center gap-2">
+            <input
+                id="api-key-input"
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder={isKeySaved ? "API 金鑰已儲存" : "在此貼上您的 API 金鑰"}
+                className="flex-grow w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+            />
+            <button
+                onClick={handleSaveApiKey}
+                disabled={!apiKeyInput.trim()}
+                className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-500 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors duration-300 whitespace-nowrap"
+            >
+                儲存金鑰
+            </button>
+        </div>
+        {showKeySavedMessage && <p className="text-green-400 text-xs mt-2">API 金鑰已成功儲存！</p>}
+        {!isKeySaved && <p className="text-yellow-400 text-xs mt-2">請先設定您的 API 金鑰才能開始清理圖片。金鑰將會儲存在您的瀏覽器中。</p>}
+         <p className="text-xs text-gray-400 mt-2">
+            您可以從 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-400">Google AI Studio</a> 取得您的 API 金鑰。
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
         <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-600 rounded-lg h-full">
           {isLoading && !originalImage && <Spinner text="正在載入圖片..."/>}
@@ -127,7 +169,7 @@ const Step1Upload: React.FC<Step1UploadProps> = ({ onComplete, initialImage = nu
       <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
         <button
           onClick={handleCleanImage}
-          disabled={!originalImage || isLoading}
+          disabled={!originalImage || isLoading || !isKeySaved}
           className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-purple-500 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors duration-300"
         >
           <SparklesIcon className="h-5 w-5" />

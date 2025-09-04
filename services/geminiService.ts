@@ -1,7 +1,7 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import type { GenerateContentResponse } from "@google/genai";
 
-const API_KEY = process.env.API_KEY;
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 if (!API_KEY) {
   // In a real app, you'd want to handle this more gracefully,
   // but for this context, throwing an error is fine.

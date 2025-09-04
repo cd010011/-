@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import type { SelectedItem } from '../types';
 import { furnishImage } from '../services/geminiService';
@@ -17,22 +16,40 @@ const Step3Result: React.FC<Step3ResultProps> = ({ cleanedImage, selectedItems, 
   const [finalImage, setFinalImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
 
   const generateImage = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setStatus(null);
     try {
       const prompt = selectedItems
         .map((item, index) => `${index + 1}. 一個 ${item.name}: ${item.prompt}`)
         .join('\n');
       
-      const result = await furnishImage(cleanedImage, prompt);
+      const result = await furnishImage(cleanedImage, prompt, setStatus);
       setFinalImage(result);
-    } catch (err) {
-      setError('AI 生成設計圖時發生錯誤，請返回並重試。');
-      console.error(err);
+    } catch (err: any) {
+        console.error(err);
+        let errorMessage = "AI 生成設計圖時發生錯誤，請返回並重試。";
+        if (err instanceof Error && err.message) {
+            try {
+                // Attempt to parse the Gemini API's JSON error response
+                const errorResponse = JSON.parse(err.message);
+                if (errorResponse.error && errorResponse.error.message) {
+                    errorMessage = `AI 服務錯誤： ${errorResponse.error.message}`;
+                } else {
+                    errorMessage = `AI 生成設計圖時發生錯誤： ${err.message}`;
+                }
+            } catch (parseError) {
+                // If it's not JSON, use the raw message
+                errorMessage = `AI 生成設計圖時發生錯誤： ${err.message}`;
+            }
+        }
+        setError(errorMessage);
     } finally {
       setIsLoading(false);
+      setStatus(null);
     }
   }, [cleanedImage, selectedItems]);
 
@@ -47,8 +64,8 @@ const Step3Result: React.FC<Step3ResultProps> = ({ cleanedImage, selectedItems, 
       
       <div className="w-full max-w-4xl mx-auto">
         <div className="aspect-w-16 aspect-h-9 bg-gray-900/50 rounded-lg flex items-center justify-center min-h-[50vh]">
-          {isLoading && <Spinner text="AI 正在揮灑創意..." />}
-          {error && <p className="text-red-400 text-center px-4">{error}</p>}
+          {isLoading && <Spinner text={status || "AI 正在揮灑創意..."} />}
+          {error && <p className="text-red-400 text-center px-4 break-words">{error}</p>}
           {!isLoading && finalImage && (
             <img src={finalImage} alt="Final furnished room" className="rounded-lg shadow-2xl object-contain max-h-[75vh]" />
           )}

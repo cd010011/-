@@ -26,6 +26,7 @@ const Step1Upload: React.FC<Step1UploadProps> = ({ onComplete, initialImage = nu
   const [cleanedImage, setCleanedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -82,15 +83,32 @@ const Step1Upload: React.FC<Step1UploadProps> = ({ onComplete, initialImage = nu
     }
     
     setError(null);
+    setStatus(null);
     setIsLoading(true);
     try {
-        const result = await cleanImage(imageToProcess);
+        const result = await cleanImage(imageToProcess, setStatus);
         setCleanedImage(result);
     } catch (err: any) {
-        setError(`AI 清理時發生錯誤：${err.message}`);
         console.error(err);
+        let errorMessage = "AI 清理時發生錯誤，請檢查您的 API 金鑰或稍後再試。";
+        if (err instanceof Error && err.message) {
+            try {
+                // Attempt to parse the Gemini API's JSON error response
+                const errorResponse = JSON.parse(err.message);
+                if (errorResponse.error && errorResponse.error.message) {
+                    errorMessage = `AI 服務錯誤： ${errorResponse.error.message}`;
+                } else {
+                    errorMessage = `AI 清理時發生錯誤： ${err.message}`;
+                }
+            } catch (parseError) {
+                // If it's not JSON, use the raw message
+                errorMessage = `AI 清理時發生錯誤： ${err.message}`;
+            }
+        }
+        setError(errorMessage);
     } finally {
         setIsLoading(false);
+        setStatus(null);
     }
   }, [originalImage, cleanedImage, isLoading, isKeySaved]);
   
@@ -154,7 +172,7 @@ const Step1Upload: React.FC<Step1UploadProps> = ({ onComplete, initialImage = nu
           )}
         </div>
         <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-600 rounded-lg min-h-[300px] h-full">
-            {isLoading && originalImage && <Spinner text="AI 正在清理空間..."/>}
+            {isLoading && originalImage && <Spinner text={status || "AI 正在清理空間..."}/>}
             {!isLoading && cleanedImage && <ImageDisplay src={cleanedImage} alt="Cleaned room" label="清理後成果"/>}
             {!isLoading && !cleanedImage && (
                 <div className="text-center text-gray-500">
@@ -164,7 +182,7 @@ const Step1Upload: React.FC<Step1UploadProps> = ({ onComplete, initialImage = nu
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-center mt-4">{error}</p>}
+      {error && <p className="text-red-400 text-center mt-4 break-words">{error}</p>}
       
       <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
         <button
